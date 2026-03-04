@@ -8,8 +8,8 @@ It can be used to fully delete the flash of the Pico 2/2w except the uf2loader, 
 
 Pre-built UF2 files are available in the [latest release](releases/tag/latest):
 
-- [`uf2loader-rp2350-full-nuke.uf2`](releases/latest/download/uf2loader-rp2350-full-nuke.uf2) — erases the full flash (bootloader area preserved)
-- [`uf2loader-rp2350-first-2MiB-nuke.uf2`](releases/latest/download/uf2loader-rp2350-first-2MiB-nuke.uf2) — erases only the first 2 MiB of flash
+- [`uf2loader-rp2350-full-nuke.uf2`](releases/download/latest/uf2loader-rp2350-full-nuke.uf2) — erases the full flash (bootloader area preserved)
+- [`uf2loader-rp2350-first-2MiB-nuke.uf2`](releases/download/latest/uf2loader-rp2350-first-2MiB-nuke.uf2) — erases only the first 2 MiB of flash
 
 
 For custom builds there are two configuration variables available.
