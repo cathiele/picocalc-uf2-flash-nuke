@@ -1,30 +1,49 @@
-# Pico Universal Flash Nuke
+# PicoCalc RP2350 flash delete uf2 variants for uf2 loader
 
-Tired of hunting for the right flash_nuke.uf2 for your RP2040 or RP2350 based board? Your Pico, your Pico W, your Pico 2 W, no, I'm not keyword stuffing... you are!
+Based on [pico-universal-flash-nuke](https://github.com/Gadgetoid/pico-universal-flash-nuke) the UF2 files in this repository delete different areas of the onboard Flash of the Pico 2 / Pico 2 W boards. 
 
-That nightmare is over. My gift to you: Pico Universal Flash Nuke!
+These files can be used with a [PicoCalc](https://github.com/clockworkpi/PicoCalc) with [uf2loader](https://github.com/pelrun/uf2loader) installed.
 
-* The only .uf2 you'll ever need for all your nuking purposes!
-* Detects the size of a Pico or RP2XXX board's attached flash and nukes it accordingly.
-* *should* work with both RP2040 and RP2350 using a single, handy .uf2.
+It can be used to fully delete the flash of the Pico 2/2w except the uf2loader, or just delete the first half (2 MiB) of the flash, e.g. before reflashing an already set up [zeptoforth](https://github.com/tabemann/zeptoforth) uf2-image to prevent flash dict issues.
 
-(This incredibly delicately combined uf2 was created using the awesome power of `cat`)
+Pre-built UF2 files are available in the [latest release](releases/tag/latest):
 
-Grab Pico Universal Flash Nuke from the releases page: https://github.com/Gadgetoid/pico-universal-flash-nuke/releases/latest
+- [`uf2loader-rp2350-full-nuke.uf2`](releases/latest/download/uf2loader-rp2350-full-nuke.uf2) — erases the full flash (bootloader area preserved)
+- [`uf2loader-rp2350-first-2MiB-nuke.uf2`](releases/latest/download/uf2loader-rp2350-first-2MiB-nuke.uf2) — erases only the first 2 MiB of flash
 
-## Support Me
+For custom builds there are two configuration variables available.
 
-I work on Pico shinies by day, occasionally cranking out balmy tools to make my job easier and sharing them with the world.
+## Build Configuration
 
-If they help you too, great! If you want to throw me a bone for my troubles, see below:
+Two CMake options control what gets erased. All are optional — without them the defaults apply (full flash, 8 KiB bootloader skipped).
 
-* Ko-Fi - https://ko-fi.com/gadgetoid
-* GitHub - https://github.com/sponsors/Gadgetoid
-* Patreon - https://www.patreon.com/c/gadgetoid
-* PayPal - https://www.paypal.com/paypalme/gadgetoid
+| Option | Default | Description |
+|---|---|---|
+| `NUKE_BOOTLOADER_SIZE` | `0x2000` | Flash offset to **start** erasing from (bootloader area that is kept). Set to `0` to erase everything including the bootloader region. |
+| `NUKE_MAX_BYTES` | `0` | Flash offset at which erasing **stops**. `0` means erase to end of flash. |
 
-Find some of my other projects below:
+### Examples
 
-* dir2uf2 - Pack a directory and append it to a MicroPython uf2 - https://github.com/gadgetoid/dir2uf2
-* py_decl - Python code to read Pico's binary declaration format - https://github.com/gadgetoid/py_decl
-* Pico pinouts - https://pico.pinout.xyz 
+**Pico 2 — erase full flash** (4 MiB, bootloader protected, RP2350):
+
+```bash
+mkdir build-rp2350 && cd build-rp2350
+cmake -DPICO_BOARD=pico2 ..
+make
+```
+
+**Pico 2 — erase only first 2 MiB** (e.g. to preserve the upper half):
+
+```bash
+mkdir build-rp2350 && cd build-rp2350
+cmake -DPICO_BOARD=pico2 -DNUKE_MAX_BYTES=0x200000 ..
+make
+```
+
+**Erase everything including bootloader area** (dangerous — use with care):
+
+```bash
+mkdir build-rp2350 && cd build-rp2350
+cmake -DNUKE_BOOTLOADER_SIZE=0 ..
+make
+```

@@ -23,7 +23,7 @@
 
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
-#include "pico/bootrom.h"
+#include "hardware/watchdog.h"
 
 int main() {
     uint flash_size_bytes;
@@ -36,24 +36,23 @@ int main() {
 
     flash_size_bytes = 1u << rxbuf[3];
 
-    flash_range_erase(0, flash_size_bytes);
-
-    // Leave an eyecatcher pattern in the first page of flash so picotool can
-    // more easily check the size:
-    static const uint8_t eyecatcher[FLASH_PAGE_SIZE] = "NUKE";
-    flash_range_program(0, eyecatcher, FLASH_PAGE_SIZE);
-
-#ifdef PICO_DEFAULT_LED_PIN
-    // Flash LED for success
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    for (int i = 0; i < 3; ++i) {
-        gpio_put(PICO_DEFAULT_LED_PIN, 1);
-        sleep_ms(100);
-        gpio_put(PICO_DEFAULT_LED_PIN, 0);
-        sleep_ms(100);
+    // Determine how many bytes to erase.
+    // NUKE_MAX_BYTES == 0 means erase all of flash.
+    // Any other value caps the erase at that offset (aligned to sector size), e.g. 0x200000 for 2 MiB.
+    uint32_t erase_end = flash_size_bytes;
+#if NUKE_MAX_BYTES > 0
+    if (erase_end > (uint32_t)(NUKE_MAX_BYTES)) {
+        // Round down to a 4096-byte sector boundary
+        erase_end = (uint32_t)(NUKE_MAX_BYTES) & ~(FLASH_SECTOR_SIZE - 1u);
     }
 #endif
 
-    reset_usb_boot(0, 0);
+    // Skip the bootloader region at the beginning of flash.
+    const uint32_t boot_size = (uint32_t)(NUKE_BOOTLOADER_SIZE) & ~(FLASH_SECTOR_SIZE - 1u);
+
+    if (erase_end > boot_size) {
+        flash_range_erase(boot_size, erase_end - boot_size);
+    }
+
+    watchdog_reboot(0, 0, 0);
 }

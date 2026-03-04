@@ -2,51 +2,38 @@ name: CMake
 
 on:
   push:
+    branches:
+      - main
   pull_request:
-  release:
-    types: [created]
 
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
   build:
-    name: ${{matrix.name}}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux
-            cache-key: linux
-            cmake-args: '-DPICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
-
-    runs-on: ${{matrix.os}}
+    name: Build UF2 artifacts (RP2350)
+    runs-on: ubuntu-latest
 
     env:
-      PICO_SDK_PATH: $GITHUB_WORKSPACE/pico-sdk
-      PIMORONI_PICO_LIBS: $GITHUB_WORKSPACE/pimoroni-pico
-      RELEASE_FILE: ${{github.event.repository.name}}-${{github.event.release.tag_name}}
+      PICO_SDK_PATH: ${{github.workspace}}/pico-sdk
 
     steps:
     - name: Compiler Cache
-      uses: actions/cache@v5
+      uses: actions/cache@v4
       with:
         path: /home/runner/.ccache
-        key: ccache-cmake-${{github.ref}}-${{matrix.board}}-${{github.sha}}
+        key: ccache-cmake-${{github.ref}}-${{github.sha}}
         restore-keys: |
-          ccache-cmake-${{github.ref}}-${{matrix.board}}
           ccache-cmake-${{github.ref}}
           ccache-cmake
 
     - name: Checkout Code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
       with:
         path: src
 
-    # Checkout the Pico SDK
     - name: Checkout Pico SDK
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
       with:
         ref: '2.2.0'
         repository: raspberrypi/pico-sdk
@@ -59,53 +46,63 @@ jobs:
         release: '13.3.Rel1'
 
     - name: Install CCache
-      run: sudo apt update && sudo apt install ccache
+      run: sudo apt update && sudo apt install -y ccache
 
-    - name: RP2350 - Create Build Environment
-      run: cmake -E make_directory ${{runner.workspace}}/build-rp2350
+    # ── Variant 1: full flash nuke ────────────────────────────────────────────
+    - name: RP2350 full-nuke - Configure CMake
+      run: |
+        cmake -E make_directory ${{runner.workspace}}/build-full
+        cmake -S ${{github.workspace}}/src -B ${{runner.workspace}}/build-full \
+          -DPICO_SDK_PATH=${{github.workspace}}/pico-sdk \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DPICO_BOARD=pico2
 
-    - name: RP2350 - Configure CMake
-      shell: bash
-      working-directory: ${{runner.workspace}}/build-rp2350
-      run: cmake $GITHUB_WORKSPACE/src ${{matrix.cmake-args}} -DPICO_BOARD=pico2
-
-    - name: RP2350 - Build
-      working-directory: ${{runner.workspace}}/build-rp2350
-      shell: bash
+    - name: RP2350 full-nuke - Build
+      working-directory: ${{runner.workspace}}/build-full
       run: |
         ccache --zero-stats || true
         cmake --build . --config $BUILD_TYPE -j 2
         ccache --show-stats || true
+        cp flash_nuke.uf2 ${{runner.workspace}}/uf2loader-rp2350-full-nuke.uf2
 
-    - name: RP2040 - Create Build Environment
-      run: cmake -E make_directory ${{runner.workspace}}/build-rp2040
-
-    - name: RP2040 - Configure CMake
-      shell: bash
-      working-directory: ${{runner.workspace}}/build-rp2040
-      run: cmake $GITHUB_WORKSPACE/src ${{matrix.cmake-args}} -DPICO_BOARD=pico
-
-    - name: RP2040 - Build
-      working-directory: ${{runner.workspace}}/build-rp2040
-      shell: bash
+    # ── Variant 2: first 2 MiB nuke ──────────────────────────────────────────
+    - name: RP2350 first-2MiB-nuke - Configure CMake
       run: |
-        ccache --zero-stats || truef
+        cmake -E make_directory ${{runner.workspace}}/build-2mib
+        cmake -S ${{github.workspace}}/src -B ${{runner.workspace}}/build-2mib \
+          -DPICO_SDK_PATH=${{github.workspace}}/pico-sdk \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DPICO_BOARD=pico2 \
+          -DNUKE_MAX_BYTES=0x200000
+
+    - name: RP2350 first-2MiB-nuke - Build
+      working-directory: ${{runner.workspace}}/build-2mib
+      run: |
+        ccache --zero-stats || true
         cmake --build . --config $BUILD_TYPE -j 2
         ccache --show-stats || true
+        cp flash_nuke.uf2 ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
 
-    - name: Combine Files
-      working-directory: ${{runner.workspace}}
-      run: |
-        cat build-rp2040/flash_nuke.uf2 build-rp2350/flash_nuke.uf2 > universal_flash_nuke.uf2
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v6
+    # ── Upload build artifacts ────────────────────────────────────────────────
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
       with:
-        name: universal_flash_nuke
-        path: ${{runner.workspace}}/universal_flash_nuke.uf2
+        name: uf2loader-rp2350-nuke-variants
+        path: |
+          ${{runner.workspace}}/uf2loader-rp2350-full-nuke.uf2
+          ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
 
-    - name: Upload Release .uf2
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+    # ── Update rolling latest release (main branch only) ─────────────────────
+    - name: Update latest release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
       with:
-        files: ${{runner.workspace}}/universal_flash_nuke.uf2
+        tag_name: latest
+        name: Latest Build
+        prerelease: true
+        make_latest: 'true'
+        files: |
+          ${{runner.workspace}}/uf2loader-rp2350-full-nuke.uf2
+          ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
