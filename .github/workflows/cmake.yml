@@ -75,7 +75,7 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DPICO_BOARD=pico2 \
-          -DNUKE_MAX_BYTES=0x200000
+          -DNUKE_END_OFFSET=0x200000
 
     - name: RP2350 first-2MiB-nuke - Build
       working-directory: ${{runner.workspace}}/build-2mib
@@ -85,6 +85,26 @@ jobs:
         ccache --show-stats || true
         cp flash_nuke.uf2 ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
 
+    # ── Variant 3: 2 MiB+64 KiB nuke + zeptoforth blocks FAT32 init ─────────
+    - name: RP2350 2MiB64k-nuke-fat32 - Configure CMake
+      run: |
+        cmake -E make_directory ${{runner.workspace}}/build-fat32
+        cmake -S ${{github.workspace}}/src -B ${{runner.workspace}}/build-fat32 \
+          -DPICO_SDK_PATH=${{github.workspace}}/pico-sdk \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DPICO_BOARD=pico2 \
+          -DNUKE_START_OFFSET=0x210000 \
+          -DNUKE_FAT32_BLOCKS=1
+
+    - name: RP2350 2MiB64k-nuke-fat32 - Build
+      working-directory: ${{runner.workspace}}/build-fat32
+      run: |
+        ccache --zero-stats || true
+        cmake --build . --config $BUILD_TYPE -j 2
+        ccache --show-stats || true
+        cp flash_nuke.uf2 ${{runner.workspace}}/uf2loader-rp2350-2MiB64k-nuke-fat32.uf2
+
     # ── Upload build artifacts ────────────────────────────────────────────────
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -93,6 +113,7 @@ jobs:
         path: |
           ${{runner.workspace}}/uf2loader-rp2350-full-nuke.uf2
           ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
+          ${{runner.workspace}}/uf2loader-rp2350-2MiB64k-nuke-fat32.uf2
 
     # ── Update rolling latest release (main branch only) ─────────────────────
     - name: Update latest release
@@ -106,3 +127,4 @@ jobs:
         files: |
           ${{runner.workspace}}/uf2loader-rp2350-full-nuke.uf2
           ${{runner.workspace}}/uf2loader-rp2350-first-2MiB-nuke.uf2
+          ${{runner.workspace}}/uf2loader-rp2350-2MiB64k-nuke-fat32.uf2

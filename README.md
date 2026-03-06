@@ -10,18 +10,21 @@ Pre-built UF2 files are available in the [latest release](releases/tag/latest):
 
 - [`uf2loader-rp2350-full-nuke.uf2`](https://github.com/cathiele/picocalc-uf2-flash-nuke/releases/download/latest/uf2loader-rp2350-full-nuke.uf2) — erases the full flash (bootloader area preserved)
 - [`uf2loader-rp2350-first-2MiB-nuke.uf2`](https://github.com/cathiele/picocalc-uf2-flash-nuke/releases/download/latest/uf2loader-rp2350-first-2MiB-nuke.uf2) — erases only the first 2 MiB of flash
+- [`uf2loader-rp2350-2MiB64k-nuke-fat32.uf2`](https://github.com/cathiele/picocalc-uf2-flash-nuke/releases/download/latest/uf2loader-rp2350-2MiB64k-nuke-fat32.uf2) — erases from 2 MiB+64 KiB to end, then writes an empty zeptoforth blocks+FAT32 filesystem
 
 
 For custom builds there are two configuration variables available.
 
 ## Build Configuration
 
-Two CMake options control what gets erased. All are optional — without them the defaults apply (full flash, 8 KiB bootloader skipped).
+Four CMake options control what gets erased and initialised. All are optional — without them the defaults apply (full flash, 8 KiB bootloader skipped, no FAT32 init).
 
 | Option | Default | Description |
 |---|---|---|
-| `NUKE_BOOTLOADER_SIZE` | `0x2000` | Flash offset to **start** erasing from (bootloader area that is kept). Set to `0` to erase everything including the bootloader region. |
-| `NUKE_MAX_BYTES` | `0` | Flash offset at which erasing **stops**. `0` means erase to end of flash. |
+| `NUKE_BOOTLOADER_SIZE` | `0x2000` | Minimum flash offset protected from erasing (bootloader area). Set to `0` to allow erasing the bootloader region. |
+| `NUKE_START_OFFSET` | `0` | Flash offset at which erasing **starts**. `0` means start right after the bootloader area. Must be ≥ `NUKE_BOOTLOADER_SIZE`; aligned down to sector boundary. |
+| `NUKE_END_OFFSET` | `0` | Flash offset at which erasing **stops**. `0` means erase to end of flash. |
+| `NUKE_FAT32_BLOCKS` | `0` | Set to `1` to write an empty zeptoforth-compatible blocks+FAT32 filesystem into the erased region after erasing. |
 
 ### Examples
 
@@ -37,7 +40,23 @@ make
 
 ```bash
 mkdir build-rp2350 && cd build-rp2350
-cmake -DPICO_BOARD=pico2 -DNUKE_MAX_BYTES=0x200000 ..
+cmake -DPICO_BOARD=pico2 -DNUKE_END_OFFSET=0x200000 ..
+make
+```
+
+**Pico 2 — erase only the second 2 MiB** (skip first 2 MiB, erase from 2 MiB to end):
+
+```bash
+mkdir build-rp2350 && cd build-rp2350
+cmake -DPICO_BOARD=pico2 -DNUKE_START_OFFSET=0x200000 ..
+make
+```
+
+**Pico 2 — erase from 2 MiB+64 KiB to end and init empty zeptoforth FAT32** (intended for PicoCalc with uf2loader):
+
+```bash
+mkdir build-rp2350 && cd build-rp2350
+cmake -DPICO_BOARD=pico2 -DNUKE_START_OFFSET=0x210000 -DNUKE_FAT32_BLOCKS=1 ..
 make
 ```
 
